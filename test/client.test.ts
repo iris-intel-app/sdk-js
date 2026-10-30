@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Iris, IrisError } from "../src/index.js";
+import { Iris, IrisError, planTrace } from "../src/index.js";
+import type { TxResult } from "../src/index.js";
 import { json, mockFetch } from "./helpers.js";
 
 const BASE = "https://iriscan.app/api";
@@ -141,35 +142,27 @@ describe("requests", () => {
     expect(calls[0]!.headers["content-type"]).toBeUndefined();
   });
 
-  it("traceTransfer reads the transaction, then traces the transfer to the exchange", async () => {
-    const exchange = "ExchangeHotWa11et1111111111111111111111111";
-    const other = "SomeoneE1se11111111111111111111111111111111";
-    const summary = {
-      chain: "solana",
-      hash: SIG,
-      time: 1767225600,
-      transfers: [
-        { from: SOL, to: other, amount: 50, asset: "SOL", mint: null, usd: 7500 },
-        { from: SOL, to: exchange, amount: 10, asset: "SOL", mint: null, usd: 1500 },
-        { from: SOL, to: exchange, amount: 200, asset: "USDC", mint: "EPj", usd: 200 },
-      ],
-      parties: [
-        { address: exchange, chain: "solana", kind: "wallet", label: "Binance deposit", category: "exchange", entity: "Binance", role: "receiver", analyzable: false },
-        { address: other, chain: "solana", kind: "wallet", label: null, category: null, entity: null, role: "receiver", analyzable: true },
-      ],
-    };
-    const { iris, calls } = client(json(summary), json({ candidates: [] }));
-    await iris.traceTransfer(SOL, SIG, { window: 3600 });
-    expect(calls[0]).toMatchObject({ url: `${BASE}/tx`, body: { hash: SIG } });
-    expect(calls[1]).toMatchObject({
-      url: `${BASE}/trace`,
-      body: { wallet: SOL, counterparty: exchange, signature: SIG, direction: "out", time: 1767225600, sol: 10, usd: 200, chain: "solana", window: 3600 },
+  it("traceTransfer asks Iris to read the transaction and trace it", async () => {
+    const { iris, calls } = client(json({ candidates: [] }));
+    await iris.traceTransfer(SOL, SIG, { chain: "solana", direction: "out" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      url: `${BASE}/trace/transfer`,
+      method: "POST",
+      body: { wallet: SOL, signature: SIG, chain: "solana", direction: "out" },
     });
   });
 
-  it("traceTransfer fails cleanly when the wallet moved nothing", async () => {
-    const { iris } = client(json({ chain: "solana", hash: SIG, time: 1, transfers: [], parties: [] }));
-    await expect(iris.traceTransfer(SOL, SIG)).rejects.toMatchObject({ code: "unresolved", status: 0 });
+  it("chains carries the picked chain, polygon included", async () => {
+    const addr = "0x" + "ef".repeat(20);
+    const { iris } = client(json({ address: addr, chains: [{ chain: "polygon", active: true, sent: 34, balance: 0, symbol: "POL" }], pick: "polygon" }));
+    expect((await iris.chains(addr)).pick).toBe("polygon");
+  });
+
+  it("analyze accepts polygon", async () => {
+    const { iris, calls } = client(json({}));
+    await iris.analyze("0x" + "ab".repeat(20), { chain: "polygon" });
+    expect(calls[0]!.body).toMatchObject({ chain: "polygon" });
   });
 });
 
@@ -340,5 +333,35 @@ describe("headers", () => {
     await iris.analyze(SOL);
     expect(iris.lastCredits).toEqual(credits);
     expect(iris.lastRateLimit).toEqual({ limit: 500, remaining: 499, reset: 1793360989 });
+  });
+});
+
+describe("planTrace (client-side)", () => {
+  const exchange = "ExchangeHotWa11et1111111111111111111111111";
+  const other = "SomeoneE1se11111111111111111111111111111111";
+  const summary = {
+    chain: "solana",
+    hash: SIG,
+    time: 1767225600,
+    transfers: [
+      { from: SOL, to: other, amount: 50, asset: "SOL", mint: null, usd: 7500 },
+      { from: SOL, to: exchange, amount: 10, asset: "SOL", mint: null, usd: 1500 },
+      { from: SOL, to: exchange, amount: 200, asset: "USDC", mint: "EPj", usd: 200 },
+    ],
+    parties: [
+      { address: exchange, chain: "solana", kind: "wallet", label: "Binance deposit", category: "exchange", entity: "Binance", role: "receiver", analyzable: false },
+      { address: other, chain: "solana", kind: "wallet", label: null, category: null, entity: null, role: "receiver", analyzable: true },
+    ],
+  } as unknown as TxResult;
+
+  it("prefers the exchange over a larger unknown party", () => {
+    expect(planTrace(summary, SOL)).toEqual({
+      wallet: SOL,
+      options: { counterparty: exchange, signature: SIG, direction: "out", time: 1767225600, sol: 10, usd: 200, chain: "solana" },
+    });
+  });
+
+  it("fails cleanly when the wallet moved nothing", () => {
+    expect(() => planTrace({ ...summary, transfers: [] }, SOL)).toThrow(IrisError);
   });
 });

@@ -3,9 +3,9 @@ import type { TraceOptions, TraceTransferOptions } from "./client.js";
 import type { TxParty, TxResult } from "./types.js";
 
 /** Coins counted as the chain's native coin in a trace's `sol` (wrapped ones included). */
-const NATIVE = new Set(["SOL", "WSOL", "ETH", "WETH", "BNB", "WBNB", "BTC", "TRX", "WTRX"]);
+const NATIVE = new Set(["SOL", "WSOL", "ETH", "WETH", "BNB", "WBNB", "BTC", "TRX", "WTRX", "POL", "WPOL", "MATIC"]);
 /** Coins counted as dollars in a trace's `usd`. */
-const STABLE = new Set(["USDC", "USDT", "USDC.E", "USDBC", "PYUSD", "USD1", "DAI", "USDS", "FDUSD"]);
+const STABLE = new Set(["USDC", "USDT", "USDC.E", "USDBC", "PYUSD", "USD1", "DAI", "USDS", "FDUSD", "PUSD"]);
 /** Party categories a trace goes through: exchanges, mixers and privacy pools, swap services. */
 const THROUGH = /exchange|cex|mixer|privacy|swap|instant/i;
 
@@ -15,7 +15,7 @@ export interface TracePlan {
 }
 
 /**
- * The `/trace` request for `wallet`'s transfer in a transaction read with `/tx`: the counterparty
+ * Client-side: the `/trace` request for `wallet`'s transfer in a transaction read with `/tx`: the counterparty
  * (the one asked for, else a known exchange, mixer or swap service, else the largest), the
  * direction, the time and the amounts moved between the two.
  */

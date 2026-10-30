@@ -15,7 +15,6 @@ import type {
   VictimsResult,
   XchainResult,
 } from "./types.js";
-import { planTrace } from "./trace-plan.js";
 
 export const DEFAULT_BASE_URL = "https://iriscan.app/api";
 export const DEFAULT_TIMEOUT_MS = 120_000;
@@ -103,12 +102,11 @@ export interface TraceOptions extends RequestOptions {
 }
 
 export interface TraceTransferOptions extends RequestOptions {
+  /** Read from the wallet's address when left out (pass it for an EVM chain other than Ethereum). */
   chain?: Chain;
   /** Which party of the transaction to trace through, when it paid several. */
   counterparty?: string;
   direction?: "in" | "out";
-  window?: number;
-  hops?: number;
 }
 
 export interface ChainOption extends RequestOptions {
@@ -205,14 +203,13 @@ export class Iris {
   }
 
   /**
-   * `trace` from just a wallet and a transaction: reads the transaction with `tx` (free), picks
-   * the wallet's transfer to or from a mixer, exchange or swap service (or `opts.counterparty`),
-   * and traces it. Costs what `trace` costs.
+   * `trace` from just a wallet and a transaction: Iris reads the transaction and finds the
+   * wallet's transfer to or from a mixer, exchange or swap service (or `opts.counterparty`).
+   * Costs what `trace` costs; a bad wallet or transaction is refused before any charge.
    */
-  async traceTransfer(wallet: string, tx: string, opts: TraceTransferOptions = {}): Promise<TraceResult> {
-    const summary = await this.tx(tx, { chain: opts.chain, signal: opts.signal });
-    const plan = planTrace(summary, wallet, opts);
-    return this.trace(plan.wallet, { ...plan.options, window: opts.window, hops: opts.hops, signal: opts.signal });
+  traceTransfer(wallet: string, tx: string, opts: TraceTransferOptions = {}): Promise<TraceResult> {
+    const body = { wallet, signature: tx, chain: opts.chain, counterparty: opts.counterparty, direction: opts.direction };
+    return this.#post("/trace/transfer", body, opts);
   }
 
   /** One transaction explained: its transfers, parties, programs and bridge. Free (with a key). */

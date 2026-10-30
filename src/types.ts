@@ -12,13 +12,14 @@ export type Chain =
   | "arbitrum"
   | "robinhood"
   | "bsc"
+  | "polygon"
   | "dydx"
   | "noble"
   | "bitcoin"
   | "tron";
 
 /** The EVM chains Iris reads. */
-export type EvmChain = "ethereum" | "base" | "arbitrum" | "robinhood" | "bsc";
+export type EvmChain = "ethereum" | "base" | "arbitrum" | "robinhood" | "bsc" | "polygon";
 
 /** Chains `/analyze` reads (all of them). */
 export type AnalyzeChain = Chain;
@@ -1216,6 +1217,8 @@ export interface FollowResult {
   end: FollowEnd;
   /** What the account has left (calls with an API key). */
   credits?: Credits;
+  /** A website visitor's free traces left (calls without a key, with the site's cookie). */
+  visitor?: { traces_left: number };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1324,6 +1327,8 @@ export interface TraceResult {
   chain?: string;
   /** Tornado Cash only: groups of withdrawals shaped like the traced batch. */
   clusters?: TraceCluster[];
+  /** A website visitor's free traces left (calls without a key, with the site's cookie). */
+  visitor?: { traces_left: number };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1446,7 +1451,10 @@ export interface ChainActivity {
 /** `POST /chains`: which EVM chains a 0x address has used. */
 export interface ChainsResult {
   address: string;
+  /** Every EVM chain Iris analyzes, in its order. */
   chains: ChainActivity[];
+  /** The most active chain (most transactions sent, then most held): where to analyze a 0x address. null when active on none. */
+  pick: string | null;
 }
 
 export type Health = "operational" | "degraded" | "outage" | "unknown";
